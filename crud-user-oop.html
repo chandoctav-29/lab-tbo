@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRUD User OOP - Pewarisan</title>
+<style>
+  :root{
+    --bg:#eef2f1; --card:#ffffff; --ink:#1d2b2a; --muted:#5f716f;
+    --brand:#0f766e; --brand-d:#0b5a54; --danger:#b3261e; --line:#d5dedc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  .hidden{display:none!important}
+  header{background:var(--brand);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+  header h1{font-size:1.1rem;margin:0}
+  main{max-width:960px;margin:20px auto;padding:0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px}
+  h2{margin:0 0 12px;font-size:1.1rem}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px}
+  input,select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;font:inherit}
+  input:focus,select:focus,button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+  button{font:inherit;cursor:pointer;border:0;border-radius:6px;padding:9px 14px;background:var(--brand);color:#fff}
+  button:hover{background:var(--brand-d)}
+  button.sec{background:#e3eceb;color:var(--ink)} button.sec:hover{background:#d3e0de}
+  button.del{background:var(--danger)}
+  button.sm{padding:5px 10px;font-size:.82rem}
+  .login{max-width:380px;margin:60px auto}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .actions{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+  .wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.92rem}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{background:#f4f8f7}
+  .badge{padding:2px 8px;border-radius:99px;font-size:.78rem;background:#dff1ee;color:var(--brand-d)}
+  .badge.admin{background:#fde8c8;color:#7a4a00}
+  .msg{padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:.88rem}
+  .msg.err{background:#fbe3e1;color:var(--danger)} .msg.ok{background:#dff1ee;color:var(--brand-d)}
+  .hint{font-size:.8rem;color:var(--muted);margin-top:12px}
+  dl{display:grid;grid-template-columns:130px 1fr;gap:6px 10px;margin:0}
+  dt{color:var(--muted)} dd{margin:0}
+  @media(max-width:560px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ============ HALAMAN LOGIN ============ -->
+<section id="loginView" class="login card">
+  <h2>Masuk</h2>
+  <div id="loginMsg"></div>
+  <label for="lUser">Username</label>
+  <input id="lUser" autocomplete="username">
+  <label for="lPass">Password</label>
+  <input id="lPass" type="password" autocomplete="current-password">
+  <div class="actions"><button id="btnLogin">Masuk</button></div>
+  <p class="hint">Demo: <b>admin / admin123</b> (Admin) atau <b>budi / user123</b> (User)</p>
+</section>
+
+<!-- ============ HALAMAN APLIKASI ============ -->
+<div id="appView" class="hidden">
+  <header>
+    <h1>CRUD User OOP</h1>
+    <div><span id="who"></span> <button class="sec sm" id="btnLogout">Keluar</button></div>
+  </header>
+  <main>
+    <div id="appMsg"></div>
+
+    <!-- Profil -->
+    <section class="card">
+      <h2>Profil saya</h2>
+      <dl id="profile"></dl>
+    </section>
+
+    <!-- Form CRUD (hanya Admin) -->
+    <section class="card" id="formCard">
+      <h2 id="formTitle">Tambah user</h2>
+      <input type="hidden" id="fId">
+      <div class="row">
+        <div><label for="fNama">Nama lengkap</label><input id="fNama"></div>
+        <div><label for="fUser">Username</label><input id="fUser"></div>
+        <div><label for="fEmail">Email</label><input id="fEmail" type="email"></div>
+        <div><label for="fPass">Password</label><input id="fPass" type="password"></div>
+      </div>
+      <label for="fRole">Peran</label>
+      <select id="fRole"><option value="user">User</option><option value="admin">Admin</option></select>
+      <div class="actions">
+        <button id="btnSave">Simpan</button>
+        <button class="sec" id="btnReset">Batal</button>
+      </div>
+    </section>
+
+    <!-- Tabel -->
+    <section class="card">
+      <h2>Tabel user</h2>
+      <div class="wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Nama</th><th>Username</th><th>Email</th><th>Peran</th><th>Hak akses</th><th>Aksi</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* =====================================================
+   KONSEP OOP: PEWARISAN (INHERITANCE)
+   User (kelas induk)  ->  Admin (kelas turunan)
+   ===================================================== */
+
+// ---- Kelas induk ----
+class User {
+  constructor(id, nama, username, email, password, role = "user") {
+    this.id = id;
+    this.nama = nama;
+    this.username = username;
+    this.email = email;
+    this.password = password;
+    this.role = role;
+  }
+  // method yang akan di-override oleh kelas turunan (polimorfisme)
+  getHakAkses() { return "Lihat profil sendiri"; }
+  canManageUsers() { return false; }
+  toJSON() {
+    return { id:this.id, nama:this.nama, username:this.username,
+             email:this.email, password:this.password, role:this.role };
+  }
+}
+
+// ---- Kelas turunan: mewarisi User ----
+class Admin extends User {
+  constructor(id, nama, username, email, password) {
+    super(id, nama, username, email, password, "admin"); // memanggil konstruktor induk
+  }
+  getHakAkses() { return "Kelola semua user (CRUD)"; }   // override
+  canManageUsers() { return true; }                      // override
+}
+
+// ---- Factory: ubah data mentah menjadi objek kelas yang sesuai ----
+function buatObjek(d) {
+  return d.role === "admin"
+    ? new Admin(d.id, d.nama, d.username, d.email, d.password)
+    : new User(d.id, d.nama, d.username, d.email, d.password, "user");
+}
+
+/* ---- Kelas penyimpanan: membungkus localStorage ---- */
+class UserStorage {
+  constructor(key = "crud_user_oop") {
+    this.key = key;
+    if (!localStorage.getItem(this.key)) this.seed();
+  }
+  seed() { // data demo
+    const demo = [
+      new Admin(1, "Administrator", "admin", "admin@contoh.id", "admin123"),
+      new User(2, "Budi Santoso", "budi", "budi@contoh.id", "user123"),
+      new User(3, "Siti Aminah", "siti", "siti@contoh.id", "user123")
+    ];
+    this.save(demo);
+  }
+  getAll() { return JSON.parse(localStorage.getItem(this.key) || "[]").map(buatObjek); }
+  save(list) { localStorage.setItem(this.key, JSON.stringify(list)); }
+  nextId() { return this.getAll().reduce((m, u) => Math.max(m, u.id), 0) + 1; }
+  // CREATE
+  create(u) { const l = this.getAll(); l.push(u); this.save(l); }
+  // READ
+  find(id) { return this.getAll().find(u => u.id === id); }
+  // UPDATE
+  update(u) { this.save(this.getAll().map(x => x.id === u.id ? u : x)); }
+  // DELETE
+  remove(id) { this.save(this.getAll().filter(u => u.id !== id)); }
+  usernameAda(username, exceptId = null) {
+    return this.getAll().some(u => u.username === username && u.id !== exceptId);
+  }
+}
+
+/* ---- Kelas Auth: sesi login ---- */
+class Auth {
+  constructor(store) { this.store = store; this.sessKey = "crud_user_session"; }
+  login(username, password) {
+    const u = this.store.getAll().find(x => x.username === username && x.password === password);
+    if (u) sessionStorage.setItem(this.sessKey, u.id);
+    return u || null;
+  }
+  logout() { sessionStorage.removeItem(this.sessKey); }
+  current() {
+    const id = parseInt(sessionStorage.getItem(this.sessKey), 10);
+    return id ? this.store.find(id) : null;
+  }
+}
+
+/* =====================================================
+   UI / KONTROLER
+   ===================================================== */
+const store = new UserStorage();
+const auth = new Auth(store);
+const $ = id => document.getElementById(id);
+let me = null;
+
+function esc(s){ const d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
+function pesan(el, teks, tipe="err"){
+  el.innerHTML = `<div class="msg ${tipe}">${esc(teks)}</div>`;
+  setTimeout(() => el.innerHTML = "", 3500);
+}
+
+function render() {
+  me = auth.current();
+  $("loginView").classList.toggle("hidden", !!me);
+  $("appView").classList.toggle("hidden", !me);
+  if (!me) return;
+
+  $("who").textContent = `${me.nama} (${me.role})`;
+  $("profile").innerHTML = `
+    <dt>Nama</dt><dd>${esc(me.nama)}</dd>
+    <dt>Username</dt><dd>${esc(me.username)}</dd>
+    <dt>Email</dt><dd>${esc(me.email)}</dd>
+    <dt>Peran</dt><dd><span class="badge ${me.role}">${me.role}</span></dd>
+    <dt>Hak akses</dt><dd>${esc(me.getHakAkses())}</dd>`; // polimorfisme
+
+  const admin = me.canManageUsers();
+  $("formCard").classList.toggle("hidden", !admin);
+
+  $("tbody").innerHTML = store.getAll().map(u => `
+    <tr>
+      <td>${u.id}</td><td>${esc(u.nama)}</td><td>${esc(u.username)}</td>
+      <td>${esc(u.email)}</td>
+      <td><span class="badge ${u.role}">${u.role}</span></td>
+      <td>${esc(u.getHakAkses())}</td>
+      <td>${admin ? `<button class="sm" data-edit="${u.id}">Ubah</button>
+          <button class="sm del" data-del="${u.id}">Hapus</button>` : "-"}</td>
+    </tr>`).join("");
+}
+
+function resetForm() {
+  ["fId","fNama","fUser","fEmail","fPass"].forEach(i => $(i).value = "");
+  $("fRole").value = "user";
+  $("formTitle").textContent = "Tambah user";
+}
+
+// Login / Logout
+$("btnLogin").onclick = () => {
+  const u = auth.login($("lUser").value.trim(), $("lPass").value);
+  if (!u) return pesan($("loginMsg"), "Username atau password salah.");
+  $("lUser").value = ""; $("lPass").value = "";
+  render();
+};
+$("lPass").addEventListener("keydown", e => { if (e.key === "Enter") $("btnLogin").click(); });
+$("btnLogout").onclick = () => { auth.logout(); resetForm(); render(); };
+
+// Simpan (Create / Update)
+$("btnSave").onclick = () => {
+  if (!me || !me.canManageUsers()) return;
+  const id = parseInt($("fId").value, 10) || null;
+  const nama = $("fNama").value.trim(), username = $("fUser").value.trim();
+  const email = $("fEmail").value.trim(), pass = $("fPass").value;
+  const role = $("fRole").value;
+
+  if (!nama || !username || !email || !pass)
+    return pesan($("appMsg"), "Semua kolom wajib diisi.");
+  if (store.usernameAda(username, id))
+    return pesan($("appMsg"), "Username sudah dipakai.");
+
+  const data = { id: id || store.nextId(), nama, username, email, password: pass, role };
+  const obj = buatObjek(data);
+  id ? store.update(obj) : store.create(obj);
+  pesan($("appMsg"), id ? "User diperbarui." : "User ditambahkan.", "ok");
+  resetForm(); render();
+};
+$("btnReset").onclick = resetForm;
+
+// Edit / Hapus lewat delegasi event
+$("tbody").addEventListener("click", e => {
+  if (!me || !me.canManageUsers()) return;
+  const eid = e.target.dataset.edit, did = e.target.dataset.del;
+  if (eid) {
+    const u = store.find(parseInt(eid, 10));
+    $("fId").value = u.id; $("fNama").value = u.nama; $("fUser").value = u.username;
+    $("fEmail").value = u.email; $("fPass").value = u.password; $("fRole").value = u.role;
+    $("formTitle").textContent = "Ubah user #" + u.id;
+    $("formCard").scrollIntoView({ behavior: "smooth" });
+  }
+  if (did) {
+    const id = parseInt(did, 10);
+    if (id === me.id) return pesan($("appMsg"), "Anda tidak bisa menghapus akun yang sedang dipakai.");
+    if (confirm("Hapus user ini?")) {
+      store.remove(id);
+      pesan($("appMsg"), "User dihapus.", "ok");
+      render();
+    }
+  }
+});
+
+render();
+</script>
+</body>
+</html>
