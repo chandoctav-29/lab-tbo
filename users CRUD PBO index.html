@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRUD PBO – Manajemen Pengguna</title>
+<style>
+  :root{
+    --bg:#f3f5f4; --surface:#ffffff; --ink:#1d2b2a; --muted:#5f6f6d; --line:#d9e0de;
+    --brand:#0f6b5c; --brand-ink:#ffffff; --danger:#b3261e; --admin:#8a4b00; --admin-bg:#fdebd0;
+    --user:#0f4c81; --user-bg:#dcebf8;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#121917; --surface:#1b2623; --ink:#e6efed; --muted:#9bb0ac; --line:#2e3d39;
+      --brand:#4cc2ac; --brand-ink:#0b1a17; --danger:#ff8a80;
+      --admin:#ffc77a; --admin-bg:#3a2a10; --user:#8fc4f4; --user-bg:#14293d;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+  main{max-width:960px;margin:0 auto;padding:24px 16px 56px}
+  h1,h2{margin:0 0 8px;line-height:1.2}
+  h1{font-size:1.5rem} h2{font-size:1.15rem}
+  p{margin:0 0 12px;color:var(--muted)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:20px}
+  .bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:20px}
+  label{display:block;font-weight:600;font-size:.9rem;margin:12px 0 4px}
+  input,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+  input:focus,select:focus,button:focus-visible{outline:3px solid var(--brand);outline-offset:1px}
+  button{font:inherit;font-weight:600;padding:9px 16px;border-radius:6px;border:1px solid var(--brand);background:var(--brand);color:var(--brand-ink);cursor:pointer}
+  button.ghost{background:transparent;color:var(--brand)}
+  button.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
+  button.small{padding:5px 10px;font-size:.85rem}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  @media(max-width:560px){.grid2{grid-template-columns:1fr}}
+  .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.8rem;font-weight:700}
+  .badge.admin{background:var(--admin-bg);color:var(--admin)}
+  .badge.user{background:var(--user-bg);color:var(--user)}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:560px}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{font-size:.85rem;color:var(--muted)}
+  td .row{margin:0}
+  .msg{padding:10px 12px;border-radius:6px;margin-top:12px;font-size:.92rem}
+  .msg.err{background:var(--admin-bg);color:var(--danger)}
+  .msg.ok{background:var(--user-bg);color:var(--user)}
+  .hint{font-size:.85rem;background:var(--bg);border:1px dashed var(--line);border-radius:6px;padding:10px 12px;margin-top:16px;color:var(--muted)}
+  dl{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;margin:0}
+  dt{color:var(--muted)} dd{margin:0;font-weight:600}
+  .login{max-width:420px;margin:8vh auto 0}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main id="app"></main>
+
+<script>
+/* =========================================================
+   KONSEP PBO YANG DIPAKAI
+   1. Class & Object   : Pengguna, Admin, User, PenggunaRepo, Auth, App
+   2. Pewarisan        : Admin dan User  extends  Pengguna
+   3. Polimorfisme     : metode hakAkses(), bisaEdit(), bisaHapus() ditimpa (override)
+   4. Enkapsulasi      : data disimpan di #properti private, diakses lewat getter
+   5. Abstraksi        : UI hanya memanggil metode, tidak peduli detail penyimpanan
+   ========================================================= */
+
+/* ---------- 1. KELAS INDUK (BASE CLASS) ---------- */
+class Pengguna {
+  #password; // properti private (enkapsulasi)
+
+  constructor({ id, nama, username, password, email, peran }) {
+    this.id = id;
+    this.nama = nama;
+    this.username = username;
+    this.email = email;
+    this.peran = peran;
+    this.#password = password;
+  }
+
+  cocokPassword(input) { return this.#password === input; }
+  ubahPassword(baru)   { if (baru) this.#password = baru; }
+
+  // Metode yang akan di-override oleh kelas turunan
+  hakAkses()         { return ["lihat daftar", "ubah profil sendiri"]; }
+  bisaTambah()       { return false; }
+  bisaEdit(target)   { return target.id === this.id; }   // default: hanya diri sendiri
+  bisaHapus(target)  { return false; }
+  bisaUbahPeran()    { return false; }
+
+  // Data untuk disimpan ke localStorage
+  toJSON() {
+    return { id: this.id, nama: this.nama, username: this.username,
+             password: this.#password, email: this.email, peran: this.peran };
+  }
+}
+
+/* ---------- 2. KELAS TURUNAN: ADMIN ---------- */
+class Admin extends Pengguna {
+  constructor(data) { super({ ...data, peran: "admin" }); }
+
+  hakAkses() { return [...super.hakAkses(), "tambah pengguna", "edit semua pengguna", "hapus pengguna"]; }
+  bisaTambah()      { return true; }
+  bisaEdit(target)  { return true; }
+  bisaHapus(target) { return target.id !== this.id; } // tidak boleh hapus akun sendiri
+  bisaUbahPeran()   { return true; }
+}
+
+/* ---------- 3. KELAS TURUNAN: USER BIASA ---------- */
+class User extends Pengguna {
+  constructor(data) { super({ ...data, peran: "user" }); }
+  // Memakai perilaku bawaan induk (hanya bisa edit profil sendiri)
+}
+
+/* ---------- 4. REPOSITORY: PENYIMPANAN LOCAL STORAGE ---------- */
+class PenggunaRepo {
+  static KUNCI = "pbo_pengguna_v1";
+
+  // Factory: membuat objek sesuai peran (polimorfisme)
+  static buat(data) { return data.peran === "admin" ? new Admin(data) : new User(data); }
+
+  semua() {
+    try {
+      const mentah = JSON.parse(localStorage.getItem(PenggunaRepo.KUNCI));
+      if (Array.isArray(mentah) && mentah.length) return mentah.map(PenggunaRepo.buat);
+    } catch (e) { /* data rusak: pakai demo */ }
+    return this.isiDemo();
+  }
+
+  simpanSemua(daftar) {
+    try { localStorage.setItem(PenggunaRepo.KUNCI, JSON.stringify(daftar)); } catch (e) {}
+    return daftar;
+  }
+
+  isiDemo() {
+    const demo = [
+      { id: 1, nama: "Administrator", username: "admin", password: "admin123", email: "admin@contoh.id", peran: "admin" },
+      { id: 2, nama: "Budi Santoso",  username: "budi",  password: "user123",  email: "budi@contoh.id",  peran: "user" },
+      { id: 3, nama: "Sari Wulandari", username: "sari", password: "user123",  email: "sari@contoh.id",  peran: "user" }
+    ].map(PenggunaRepo.buat);
+    return this.simpanSemua(demo);
+  }
+
+  // ----- CRUD -----
+  baca()           { return this.semua(); }                         // Read
+  cari(id)         { return this.semua().find(p => p.id === id); }
+  tambah(data) {                                                    // Create
+    const daftar = this.semua();
+    if (daftar.some(p => p.username === data.username)) throw new Error("Username sudah dipakai.");
+    data.id = Math.max(0, ...daftar.map(p => p.id)) + 1;
+    daftar.push(PenggunaRepo.buat(data));
+    this.simpanSemua(daftar);
+  }
+  ubah(id, data) {                                                  // Update
+    const daftar = this.semua();
+    if (daftar.some(p => p.username === data.username && p.id !== id)) throw new Error("Username sudah dipakai.");
+    const i = daftar.findIndex(p => p.id === id);
+    const lama = daftar[i];
+    // Buat ulang objek agar kelasnya mengikuti peran baru
+    const baru = PenggunaRepo.buat({ ...lama.toJSON(), ...data, id });
+    if (!data.password) baru.ubahPassword(lama.toJSON().password);
+    daftar[i] = baru;
+    this.simpanSemua(daftar);
+  }
+  hapus(id) { this.simpanSemua(this.semua().filter(p => p.id !== id)); } // Delete
+  reset()   { localStorage.removeItem(PenggunaRepo.KUNCI); return this.isiDemo(); }
+}
+
+/* ---------- 5. AUTENTIKASI (sesi di localStorage) ---------- */
+class Auth {
+  static KUNCI = "pbo_sesi_v1";
+  constructor(repo) { this.repo = repo; }
+
+  login(username, password) {
+    const p = this.repo.semua().find(x => x.username === username);
+    if (!p || !p.cocokPassword(password)) throw new Error("Username atau password salah.");
+    localStorage.setItem(Auth.KUNCI, String(p.id));
+    return p;
+  }
+  logout()  { localStorage.removeItem(Auth.KUNCI); }
+  aktif() {
+    const id = Number(localStorage.getItem(Auth.KUNCI));
+    return id ? this.repo.cari(id) : null;
+  }
+}
+
+/* ---------- 6. KELAS APLIKASI (UI) ---------- */
+class App {
+  constructor(root) {
+    this.root = root;
+    this.repo = new PenggunaRepo();
+    this.auth = new Auth(this.repo);
+    this.pesan = null;        // {jenis:'ok'|'err', teks}
+    this.editId = null;       // null = mode tambah, angka = mode edit
+    this.formTerbuka = false;
+    this.root.addEventListener("click", e => this.klik(e));
+    this.root.addEventListener("submit", e => this.kirim(e));
+    this.render();
+  }
+
+  esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+  tampilPesan(jenis, teks) { this.pesan = { jenis, teks }; }
+  kotakPesan() {
+    if (!this.pesan) return "";
+    const h = `<div class="msg ${this.pesan.jenis}" role="status">${this.esc(this.pesan.teks)}</div>`;
+    this.pesan = null; return h;
+  }
+  lencana(p) { return `<span class="badge ${p.peran}">${p.peran === "admin" ? "Admin" : "User"}</span>`; }
+
+  render() {
+    const saya = this.auth.aktif();
+    this.root.innerHTML = saya ? this.halamanUtama(saya) : this.halamanLogin();
+  }
+
+  /* ----- Tampilan: Login ----- */
+  halamanLogin() {
+    return `
+    <section class="card login">
+      <h1>Masuk</h1>
+      <p>Aplikasi CRUD pengguna berbasis PBO.</p>
+      <form data-aksi="login">
+        <label for="u">Username</label>
+        <input id="u" name="username" autocomplete="username" required autofocus>
+        <label for="p">Password</label>
+        <input id="p" name="password" type="password" autocomplete="current-password" required>
+        <div class="row"><button type="submit">Masuk</button></div>
+      </form>
+      ${this.kotakPesan()}
+      <div class="hint">
+        <strong>Akun demo</strong><br>
+        Admin: <code>admin</code> / <code>admin123</code><br>
+        User: <code>budi</code> / <code>user123</code> atau <code>sari</code> / <code>user123</code>
+      </div>
+    </section>`;
+  }
+
+  /* ----- Tampilan: Halaman utama setelah login ----- */
+  halamanUtama(saya) {
+    const daftar = this.repo.baca();
+    const target = this.editId ? this.repo.cari(this.editId) : null;
+    return `
+    <div class="bar">
+      <div><h1>Manajemen Pengguna</h1><p style="margin:0">Masuk sebagai ${this.esc(saya.nama)} ${this.lencana(saya)}</p></div>
+      <button class="ghost" data-aksi="logout">Keluar</button>
+    </div>
+    ${this.kotakPesan()}
+
+    <section class="card">
+      <h2>Profil saya</h2>
+      <dl>
+        <dt>Nama</dt><dd>${this.esc(saya.nama)}</dd>
+        <dt>Username</dt><dd>${this.esc(saya.username)}</dd>
+        <dt>Email</dt><dd>${this.esc(saya.email)}</dd>
+        <dt>Peran</dt><dd>${this.lencana(saya)} <small style="font-weight:400;color:var(--muted)">(${saya.constructor.name} extends Pengguna)</small></dd>
+        <dt>Hak akses</dt><dd style="font-weight:400">${saya.hakAkses().join(", ")}</dd>
+      </dl>
+      <div class="row"><button class="ghost" data-aksi="edit" data-id="${saya.id}">Edit profil</button></div>
+    </section>
+
+    ${this.formTerbuka ? this.formPengguna(saya, target) : ""}
+
+    <section class="card">
+      <div class="bar" style="margin-bottom:8px">
+        <h2 style="margin:0">Tabel pengguna (${daftar.length})</h2>
+        ${saya.bisaTambah() ? `<button data-aksi="tambah">Tambah pengguna</button>` : ""}
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>ID</th><th>Nama</th><th>Username</th><th>Email</th><th>Peran</th><th>Aksi</th></tr></thead>
+          <tbody>
+            ${daftar.map(p => `
+              <tr>
+                <td>${p.id}</td>
+                <td>${this.esc(p.nama)}</td>
+                <td>${this.esc(p.username)}</td>
+                <td>${this.esc(p.email)}</td>
+                <td>${this.lencana(p)}</td>
+                <td><div class="row">
+                  ${saya.bisaEdit(p) ? `<button class="small ghost" data-aksi="edit" data-id="${p.id}">Edit</button>` : ""}
+                  ${saya.bisaHapus(p) ? `<button class="small danger" data-aksi="hapus" data-id="${p.id}">Hapus</button>` : ""}
+                  ${!saya.bisaEdit(p) && !saya.bisaHapus(p) ? `<span style="color:var(--muted)">Hanya lihat</span>` : ""}
+                </div></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      ${saya.bisaTambah() ? `<div class="row"><button class="small ghost" data-aksi="reset">Reset data demo</button></div>` : ""}
+    </section>`;
+  }
+
+  /* ----- Tampilan: Form tambah / edit ----- */
+  formPengguna(saya, t) {
+    const mode = t ? "Edit pengguna" : "Tambah pengguna";
+    const v = k => this.esc(t ? t[k] : "");
+    return `
+    <section class="card" id="form-area">
+      <h2>${mode}</h2>
+      <form data-aksi="simpan">
+        <div class="grid2">
+          <div><label for="f-nama">Nama lengkap</label>
+            <input id="f-nama" name="nama" value="${v("nama")}" required></div>
+          <div><label for="f-email">Email</label>
+            <input id="f-email" name="email" type="email" value="${v("email")}" required></div>
+          <div><label for="f-user">Username</label>
+            <input id="f-user" name="username" value="${v("username")}" required></div>
+          <div><label for="f-pass">Password ${t ? "(kosongkan jika tidak diubah)" : ""}</label>
+            <input id="f-pass" name="password" type="password" ${t ? "" : "required"} autocomplete="new-password"></div>
+        </div>
+        ${saya.bisaUbahPeran() ? `
+          <label for="f-peran">Peran</label>
+          <select id="f-peran" name="peran">
+            <option value="user" ${t && t.peran === "user" ? "selected" : ""}>User</option>
+            <option value="admin" ${t && t.peran === "admin" ? "selected" : ""}>Admin</option>
+          </select>` : ""}
+        <div class="row">
+          <button type="submit">Simpan</button>
+          <button type="button" class="ghost" data-aksi="batal">Batal</button>
+        </div>
+      </form>
+    </section>`;
+  }
+
+  /* ----- Penanganan event ----- */
+  kirim(e) {
+    e.preventDefault();
+    const aksi = e.target.dataset.aksi;
+    const f = Object.fromEntries(new FormData(e.target));
+    try {
+      if (aksi === "login") {
+        this.auth.login(f.username.trim(), f.password);
+      } else if (aksi === "simpan") {
+        this.simpan(f);
+      }
+    } catch (err) {
+      this.tampilPesan("err", err.message);
+    }
+    this.render();
+    if (this.formTerbuka) document.getElementById("form-area")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  simpan(f) {
+    const saya = this.auth.aktif();
+    const data = { nama: f.nama.trim(), email: f.email.trim(), username: f.username.trim(), password: f.password };
+    if (this.editId) {
+      const t = this.repo.cari(this.editId);
+      if (!saya.bisaEdit(t)) throw new Error("Anda tidak berhak mengubah data ini.");
+      data.peran = saya.bisaUbahPeran() && f.peran ? f.peran : t.peran;
+      this.repo.ubah(this.editId, data);
+      this.tampilPesan("ok", "Data pengguna berhasil diperbarui.");
+    } else {
+      if (!saya.bisaTambah()) throw new Error("Hanya admin yang boleh menambah pengguna.");
+      data.peran = f.peran || "user";
+      this.repo.tambah(data);
+      this.tampilPesan("ok", "Pengguna baru berhasil ditambahkan.");
+    }
+    this.formTerbuka = false; this.editId = null;
+  }
+
+  klik(e) {
+    const tombol = e.target.closest("[data-aksi]");
+    if (!tombol || tombol.tagName === "FORM") return;
+    const aksi = tombol.dataset.aksi;
+    const id = Number(tombol.dataset.id);
+    const saya = this.auth.aktif();
+
+    if (aksi === "logout") { this.auth.logout(); this.formTerbuka = false; this.editId = null; }
+    else if (aksi === "tambah") { this.formTerbuka = true; this.editId = null; }
+    else if (aksi === "edit")   { this.formTerbuka = true; this.editId = id; }
+    else if (aksi === "batal")  { this.formTerbuka = false; this.editId = null; }
+    else if (aksi === "hapus") {
+      const t = this.repo.cari(id);
+      if (saya.bisaHapus(t) && confirm(`Hapus pengguna "${t.nama}"?`)) {
+        this.repo.hapus(id);
+        this.tampilPesan("ok", "Pengguna berhasil dihapus.");
+      }
+    }
+    else if (aksi === "reset" && confirm("Kembalikan semua data ke data demo?")) {
+      this.repo.reset(); this.auth.logout();
+      this.tampilPesan("ok", "Data demo dipulihkan. Silakan masuk lagi.");
+    }
+    this.render();
+    if (this.formTerbuka && (aksi === "tambah" || aksi === "edit"))
+      document.getElementById("form-area")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+new App(document.getElementById("app"));
+</script>
+</body>
+</html>
